@@ -267,6 +267,8 @@ class InstallTests(unittest.TestCase):
         self.assertTrue(servers["contextforge"]["args"][-2].endswith("engines/context-forge"))
         self.assertNotIn("platforms.yaml", (top / ".mcp.json").read_text(encoding="utf-8"))
         self.assertFalse((top / "engines" / "brain-forge").exists())
+        self.assertFalse((top / "vault").exists())
+        self.assertNotIn("library:", registry)
         self.assertNotIn("brain-forge", lock)
         self.assertFalse(any(path.name == "vault-drop.md" for path in shelf.rglob("*.md")))
 
@@ -320,7 +322,6 @@ class InstallTests(unittest.TestCase):
         top = self.tmp / "garden"
         self._install(top, brain_forge=True)
         self._assert_brain_forge(top)
-        self.assertNotIn("library:", (top / "nexus.md").read_text(encoding="utf-8"))
         needle = "Sco" + "tt"
         other = "Mac" + "key"
         own = {str(top.resolve()), top.resolve().as_posix()}
@@ -390,6 +391,28 @@ class InstallTests(unittest.TestCase):
             harvested.read_text(encoding="utf-8"),
             "# Types\n\nA public contract line.\n",
         )
+        note = top / "vault" / "raw" / "note.md"
+        note.write_text("keep\n", encoding="utf-8")
+        owner = top / "vault" / "_brain-forge" / "eval.md"
+        owner.write_text("# Eval\n\nowner\n", encoding="utf-8")
+        primer = top / "vault" / "primers" / "distill.md"
+        primer.write_text("owner primer\n", encoding="utf-8")
+        constitution = top / "vault" / "_brain-forge" / "constitution.md"
+        constitution.write_text("stale\n", encoding="utf-8")
+        agents = top / "vault" / "AGENTS.md"
+        agents.write_text("changed\n", encoding="utf-8")
+        self._install(top, update=True)
+        self.assertEqual(note.read_text(encoding="utf-8"), "keep\n")
+        self.assertEqual(owner.read_text(encoding="utf-8"), "# Eval\n\nowner\n")
+        self.assertEqual(primer.read_text(encoding="utf-8"), "owner primer\n")
+        self.assertEqual(agents.read_text(encoding="utf-8"), "changed\n")
+        self.assertEqual(
+            constitution.read_text(encoding="utf-8"),
+            "# Constitution\n\nA public contract line.\n",
+        )
+        registry = (top / "nexus.md").read_text(encoding="utf-8")
+        self.assertEqual(registry.count("library:"), 1)
+        self.assertEqual(registry.count("\n| vault |"), 1)
 
     def _theme(self):
         return install.parse_manifest(
@@ -417,7 +440,25 @@ class InstallTests(unittest.TestCase):
                 / "capture-types.md"
             ).is_file()
         )
-        self.assertTrue((top / "engines" / "brain-forge" / "provisions" / "pack.yaml").is_file())
+        self.assertFalse((top / "engines" / "brain-forge").exists())
+        vault = top / "vault"
+        self.assertTrue((vault / "_brain-forge" / "constitution.md").is_file())
+        self.assertTrue((vault / "raw" / "_log.md").is_file())
+        self.assertIn("## Pages", (vault / "wiki" / "_index.md").read_text(encoding="utf-8"))
+        self.assertIn(
+            "## Recent activity",
+            (vault / "wiki" / "_index.md").read_text(encoding="utf-8"),
+        )
+        catalog = (vault / "primers" / "_index.md").read_text(encoding="utf-8")
+        self.assertIn("`primers/distill.md`", catalog)
+        self.assertIn("`primers/_system.md`", catalog)
+        self.assertNotIn("`primers/_me.md`", catalog)
+        self.assertTrue((vault / "primers" / "_me.md").is_file())
+        self.assertIn("_brain-forge/", (vault / ".graphifyignore").read_text(encoding="utf-8"))
+        registry = (top / "nexus.md").read_text(encoding="utf-8")
+        self.assertIn("library: vault\n", registry)
+        self.assertIn("| vault | vault/ | node | active | no | no |  |  |", registry)
+        self.assertIn("Kind: node.", (vault / "AGENTS.md").read_text(encoding="utf-8"))
         lock = install.parse_lock(
             (top / "shelf" / "library" / "lock.yaml").read_text(encoding="utf-8")
         )

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Create a Domain Prime top folder, its shelf, and its engines.
 
-The shelf is the vault root for that tree. Insitu loads one role file from a
+The shelf is Insitu's vault root for that tree. Insitu loads one role file from a
 pack (roles/<pack id>.yaml) and loads every other role from the vault root.
 The three roles are therefore written in both places. Harvest copies articles
 and skills only, so a later harvest does not keep the role files inside the
@@ -12,10 +12,12 @@ into engines/, harvests each provisions/pack.yaml onto the shelf, and writes
 .mcp.json so a session opened at the top folder starts those servers against
 that folder. It does not edit a user-level host config.
 
---with-brain-forge also clones Brain Forge at its pin, harvests that pack, and
-copies this product's theme pack onto the shelf. No map composes the theme
-pack. Passing the flag on an existing install adds those two and leaves the
-rest of the tree alone.
+--with-brain-forge also harvests Brain Forge and copies the theme pack onto
+the shelf. The library itself is vault/ at the install root, with a library
+row in the registry. The pin is cloned only long enough to seed that folder,
+then removed. It is not left in engines/. No map composes the theme pack.
+Passing the flag on an existing install adds the library and leaves the rest
+of the tree alone.
 """
 
 from __future__ import annotations
@@ -24,7 +26,9 @@ import json
 import shutil
 import subprocess
 import sys
+import tempfile
 from collections.abc import Callable
+from datetime import date
 from pathlib import Path
 
 SEGMENT = r"^[a-z0-9-]+$"
@@ -395,26 +399,29 @@ def _place_engines(top: Path, fetch: Fetch) -> None:
 
 
 def _brain_forge_present(top: Path) -> bool:
-    return (top / "engines" / BRAIN_FORGE["name"]).is_dir()
+    return (top / "vault" / "_brain-forge").is_dir()
 
 
 def _place_brain_forge(product: Path, top: Path, fetch: Fetch) -> None:
-    """Clone Brain Forge when it is missing, harvest it, and copy the theme pack."""
+    """Harvest Brain Forge, seed vault/ at the install root, and drop the clone."""
     theme_path = product / "provisions" / "theme" / "pack.yaml"
     if not theme_path.is_file():
         raise InstallError("The product has no provisions/theme/pack.yaml.")
     theme = parse_manifest(theme_path.read_text(encoding="utf-8"))
     _validate_theme(product, theme)
-    engines = top / "engines"
-    engines.mkdir(parents=True, exist_ok=True)
-    dest = engines / BRAIN_FORGE["name"]
-    if not dest.exists():
+    scratch = Path(tempfile.mkdtemp(prefix="domainprime-brain-forge-"))
+    try:
+        dest = scratch / BRAIN_FORGE["name"]
         fetch(BRAIN_FORGE["repo"], BRAIN_FORGE["tag"], dest)
-    manifest = _engine_manifest(dest)
-    if manifest["id"] != BRAIN_FORGE["name"]:
-        raise InstallError("The Brain Forge pin is not the brain-forge pack.")
-    _harvest_checkout(dest, top / "shelf", manifest)
-    _place_theme(product, top / "shelf", theme)
+        manifest = _engine_manifest(dest)
+        if manifest["id"] != BRAIN_FORGE["name"]:
+            raise InstallError("The Brain Forge pin is not the brain-forge pack.")
+        _harvest_checkout(dest, top / "shelf", manifest)
+        _place_theme(product, top / "shelf", theme)
+        _install_vault(dest, top / "vault")
+        _ensure_library(top)
+    finally:
+        shutil.rmtree(scratch, ignore_errors=True)
 
 
 def _validate_theme(product: Path, manifest: dict) -> None:
@@ -444,6 +451,161 @@ def _validate_theme(product: Path, manifest: dict) -> None:
         src = _checked_source(product, item["path"])
         if not src.is_file():
             raise InstallError(f"The pack member is missing: {item['path']}")
+
+
+OWNER_FRAMEWORK = (
+    "eval.md",
+    "system-log.md",
+    "skills/forge-synthesis-engine/preferences.md",
+    "skills/forge-synthesis-engine/tweaks-log.md",
+)
+SEEDED_PRIMERS = ("distill.md", "_system.md", "_me.md")
+LIBRARY_ROW = "| vault | vault/ | node | active | no | no |  |  |"
+
+
+def _install_vault(checkout: Path, vault: Path) -> None:
+    """Copy the framework into vault/ and create the layout Brain Forge expects."""
+    source = checkout / "_brain-forge"
+    if not source.is_dir():
+        raise InstallError("The Brain Forge pin has no _brain-forge folder.")
+    vault.mkdir(parents=True, exist_ok=True)
+    if (vault / "_brain-forge").is_dir():
+        _refresh_framework(source, vault)
+    else:
+        shutil.copytree(source, vault / "_brain-forge")
+        _write_if_absent(vault / "_brain-forge" / "eval.md", "# Eval\n")
+        _write_if_absent(vault / "_brain-forge" / "system-log.md", "# System log\n")
+    _seed_layout(vault)
+
+
+def _refresh_framework(source: Path, vault: Path) -> None:
+    """Replace the shipped framework and put the owner's own files back."""
+    framework = vault / "_brain-forge"
+    kept: list[tuple[Path, bytes]] = []
+    for rel in OWNER_FRAMEWORK:
+        path = framework / rel
+        if path.is_file():
+            kept.append((path.relative_to(framework), path.read_bytes()))
+    shutil.rmtree(framework)
+    shutil.copytree(source, framework)
+    for rel, payload in kept:
+        dest = framework / rel
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_bytes(payload)
+
+
+def _seed_layout(vault: Path) -> None:
+    """First-install files only. Anything already there belongs to the owner."""
+    today = date.today().isoformat()
+    for name in ("raw", "wiki", "primers"):
+        (vault / name).mkdir(parents=True, exist_ok=True)
+    _write_if_absent(vault / "raw" / "_log.md", "# Raw log\n")
+    _write_if_absent(
+        vault / "wiki" / "_index.md",
+        "---\n"
+        "type: reference\n"
+        "signal: true\n"
+        "status: active\n"
+        f"created: {today}\n"
+        "---\n\n"
+        "# Wiki index\n\n"
+        "## Pages\n\n"
+        "## Recent activity\n",
+    )
+    ignore = vault / "_brain-forge" / ".graphifyignore"
+    if ignore.is_file():
+        _copy_if_absent(ignore, vault / ".graphifyignore")
+    for name in SEEDED_PRIMERS:
+        src = vault / "_brain-forge" / "primers" / name
+        if src.is_file():
+            _copy_if_absent(src, vault / "primers" / name)
+    _write_if_absent(vault / "primers" / "_index.md", _primer_index(vault, today))
+    _write_if_absent(
+        vault / "AGENTS.md",
+        "# AGENTS.md — vault\n\n"
+        "This folder is the library for this install. Kind: node.\n\n"
+        "How the vault operates is `_brain-forge/constitution.md`.\n\n"
+        "Insitu is not subscribed here. The first working session asks what to subscribe.\n",
+    )
+
+
+def _primer_index(vault: Path, today: str) -> str:
+    folder = vault / "_brain-forge" / "primers"
+    names = []
+    if folder.is_dir():
+        for path in sorted(folder.glob("*.md")):
+            if _signal(path):
+                names.append(path.name)
+    lines = [
+        "---",
+        "type: reference",
+        "signal: true",
+        "status: active",
+        f"created: {today}",
+        "---",
+        "",
+        "# Primers",
+        "",
+    ]
+    lines.extend(f"- `primers/{name}`" for name in names)
+    lines.append("")
+    return "\n".join(lines)
+
+
+def _signal(path: Path) -> bool:
+    """True when the frontmatter says signal: true. Body text does not count."""
+    text = path.read_text(encoding="utf-8")
+    if not text.startswith("---"):
+        return False
+    end = text.find("\n---", 3)
+    if end == -1:
+        return False
+    return any(line.strip() == "signal: true" for line in text[3:end].splitlines())
+
+
+def _write_if_absent(path: Path, text: str) -> None:
+    if path.exists():
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8")
+
+
+def _copy_if_absent(src: Path, dest: Path) -> None:
+    if dest.exists():
+        return
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(src, dest)
+
+
+def _ensure_library(top: Path) -> None:
+    path = top / "nexus.md"
+    lines = path.read_text(encoding="utf-8").splitlines()
+    named = [line.strip() for line in lines if line.startswith("library:")]
+    if any(line != "library: vault" for line in named):
+        raise InstallError("The registry already names a library.")
+    if "library: vault" not in named:
+        out: list[str] = []
+        inserted = False
+        for line in lines:
+            out.append(line)
+            if not inserted and line.startswith("admin:"):
+                out.append("library: vault")
+                inserted = True
+        if not inserted:
+            raise InstallError("The registry has no admin line.")
+        lines = out
+    if not any(line.startswith("| vault |") for line in lines):
+        sep = next((i for i, line in enumerate(lines) if line.startswith("|---")), None)
+        if sep is None:
+            raise InstallError("The registry has no node table.")
+        at = sep + 1
+        while at < len(lines) and lines[at].startswith("|"):
+            at += 1
+        lines.insert(at, LIBRARY_ROW)
+    text = "\n".join(lines)
+    if not text.endswith("\n"):
+        text += "\n"
+    path.write_text(text, encoding="utf-8")
 
 
 def _place_theme(product: Path, shelf: Path, manifest: dict) -> None:
