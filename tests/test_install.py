@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+import shutil
 import sys
 import tempfile
 import unittest
@@ -12,6 +14,18 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 import install
+
+FIXTURES = ROOT / "tests" / "fixtures" / "engines"
+
+
+def fixture_fetch(repo: str, tag: str, dest: Path) -> None:
+    name = repo.rstrip("/").rsplit("/", 1)[-1]
+    if name.endswith(".git"):
+        name = name[: -len(".git")]
+    src = FIXTURES / name
+    if not src.is_dir():
+        raise install.InstallError(f"No fixture for {name}")
+    shutil.copytree(src, dest)
 
 
 def _ids(text: str, heading: str) -> list[str]:
@@ -38,9 +52,12 @@ class InstallTests(unittest.TestCase):
     def tearDown(self):
         self._tmp.cleanup()
 
+    def _install(self, top, update=False):
+        install.install_tree(ROOT, top, update=update, fetch=fixture_fetch)
+
     def test_install_writes_the_registry_and_the_three_roles(self):
         top = self.tmp / "garden"
-        install.install_tree(ROOT, top)
+        self._install(top)
         registry = (top / "nexus.md").read_text(encoding="utf-8")
         self.assertTrue(registry.startswith("# nexus: garden\n"))
         self.assertIn("admin: the principal", registry)
@@ -79,7 +96,7 @@ class InstallTests(unittest.TestCase):
 
     def test_update_keeps_a_sentinel_and_refreshes_roles(self):
         top = self.tmp / "garden"
-        install.install_tree(ROOT, top)
+        self._install(top)
         registry = top / "nexus.md"
         registry.write_text(registry.read_text(encoding="utf-8") + "SENTINEL\n", encoding="utf-8")
         role = top / "shelf" / "roles" / "node.yaml"
@@ -97,7 +114,7 @@ class InstallTests(unittest.TestCase):
             "example:\n  0.1.0:\n    source: harvest\n" + lock_path.read_text(encoding="utf-8"),
             encoding="utf-8",
         )
-        install.install_tree(ROOT, top, update=True)
+        self._install(top, update=True)
         self.assertIn("SENTINEL", registry.read_text(encoding="utf-8"))
         self.assertEqual(role.read_text(encoding="utf-8"), original)
         self.assertIn("notes: keep", project.read_text(encoding="utf-8"))
@@ -114,9 +131,9 @@ class InstallTests(unittest.TestCase):
 
     def test_second_run_refuses(self):
         top = self.tmp / "garden"
-        install.install_tree(ROOT, top)
+        self._install(top)
         with self.assertRaises(install.InstallError):
-            install.install_tree(ROOT, top)
+            self._install(top)
 
     def test_nonempty_refuses(self):
         top = self.tmp / "garden"
@@ -155,17 +172,134 @@ class InstallTests(unittest.TestCase):
 
     def test_created_shelf_has_no_personal_name(self):
         top = self.tmp / "garden"
-        install.install_tree(ROOT, top)
+        self._install(top)
         needle = "Sco" + "tt"
         other = "Mac" + "key"
+        own = {str(top.resolve()), top.resolve().as_posix()}
         hits = []
         for path in top.rglob("*"):
             if not path.is_file():
                 continue
             text = path.read_text(encoding="utf-8", errors="ignore")
+            for item in own:
+                text = text.replace(item, "")
             if needle in text or other in text:
-                hits.append(path)
+                hits.append(str(path.relative_to(top)))
         self.assertEqual(hits, [])
+
+    def test_engines_are_harvested_and_pointed_at_the_tree(self):
+        top = self.tmp / "garden"
+        self._install(top)
+        shelf = top / "shelf"
+        self.assertTrue(
+            (
+                shelf
+                / "library"
+                / "insitu-core"
+                / "0.7.0"
+                / "articles"
+                / "methodology"
+                / "insitu-orientation.md"
+            ).is_file()
+        )
+        self.assertTrue(
+            (
+                shelf
+                / "library"
+                / "insitu-core"
+                / "0.7.0"
+                / "skills"
+                / "protocol-audit"
+                / "SKILL.md"
+            ).is_file()
+        )
+        self.assertFalse((shelf / "library" / "insitu-core" / "0.7.0" / "roles").exists())
+        self.assertTrue(
+            (
+                shelf
+                / "library"
+                / "envoy"
+                / "0.2.3"
+                / "articles"
+                / "methodology"
+                / "envoy-mail.md"
+            ).is_file()
+        )
+        self.assertTrue(
+            (
+                shelf
+                / "library"
+                / "context-forge"
+                / "0.4.1"
+                / "articles"
+                / "methodology"
+                / "use-context-forge.md"
+            ).is_file()
+        )
+        self.assertFalse(any(path.name == "product-provisions.md" for path in shelf.rglob("*.md")))
+        lock = install.parse_lock((shelf / "library" / "lock.yaml").read_text(encoding="utf-8"))
+        self.assertEqual(lock["insitu-core"]["0.7.0"]["source"], "harvest")
+        self.assertEqual(lock["envoy"]["0.2.3"]["source"], "harvest")
+        self.assertEqual(lock["context-forge"]["0.4.1"]["source"], "harvest")
+        self.assertEqual(lock["domainprime"]["0.1.0"]["source"], "copy")
+        global_map = (shelf / "projects" / "_global" / "map.yaml").read_text(encoding="utf-8")
+        self.assertEqual(global_map.count("methodology/product-provisions"), 1)
+        self.assertIn("pack: insitu-core", global_map)
+        self.assertIn("version: 0.7.0", global_map)
+        registry = (top / "nexus.md").read_text(encoding="utf-8")
+        self.assertNotIn("| engines |", registry)
+        servers = json.loads((top / ".mcp.json").read_text(encoding="utf-8"))["mcpServers"]
+        self.assertEqual(Path(servers["insitu"]["env"]["INSITU_ROOT"]), top.resolve())
+        self.assertEqual(Path(servers["insitu"]["env"]["INSITU_HOME"]), shelf.resolve())
+        self.assertEqual(Path(servers["envoy"]["env"]["ENVOY_ROOT"]), top.resolve())
+        self.assertEqual(
+            Path(servers["contextforge"]["env"]["CONTEXTFORGE_ROOT"]), top.resolve()
+        )
+        self.assertEqual(servers["insitu"]["args"][-1], "insitu")
+        self.assertTrue(servers["insitu"]["args"][-2].endswith("engines/insitu"))
+        self.assertTrue(servers["envoy"]["args"][-2].endswith("engines/envoy"))
+        self.assertTrue(servers["contextforge"]["args"][-2].endswith("engines/context-forge"))
+        self.assertNotIn("platforms.yaml", (top / ".mcp.json").read_text(encoding="utf-8"))
+
+    def test_update_reharvests_and_does_not_repeat_the_import(self):
+        top = self.tmp / "garden"
+        self._install(top)
+        copied = (
+            top
+            / "shelf"
+            / "library"
+            / "envoy"
+            / "0.2.3"
+            / "articles"
+            / "methodology"
+            / "envoy-status.md"
+        )
+        copied.write_text("stale\n", encoding="utf-8")
+        self._install(top, update=True)
+        self.assertEqual(copied.read_text(encoding="utf-8"), "# Status\n\nA public contract line.\n")
+        global_map = (top / "shelf" / "projects" / "_global" / "map.yaml").read_text(
+            encoding="utf-8"
+        )
+        self.assertEqual(global_map.count("imports:"), 1)
+        self.assertTrue((top / "engines" / "insitu" / "provisions" / "pack.yaml").is_file())
+
+    def test_engine_missing_manifest_refuses(self):
+        def fetch(repo, tag, dest):
+            dest.mkdir(parents=True)
+            (dest / "README.md").write_text("empty\n", encoding="utf-8")
+
+        top = self.tmp / "garden"
+        with self.assertRaises(install.InstallError) as caught:
+            install.install_tree(ROOT, top, fetch=fetch)
+        self.assertIn("provisions/pack.yaml", str(caught.exception))
+
+    def test_pins_are_the_every_install_rows(self):
+        rows = []
+        for line in (ROOT / "README.md").read_text(encoding="utf-8").splitlines():
+            if line.startswith("| ") and "every install" in line:
+                cells = [cell.strip() for cell in line.strip("|").split("|")]
+                rows.append((cells[1], cells[2]))
+        self.assertEqual([(pin["repo"], pin["tag"]) for pin in install.PINS], rows)
 
     def test_usage(self):
         self.assertEqual(install.main([]), 2)

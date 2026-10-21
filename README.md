@@ -14,13 +14,17 @@ python install.py <top-folder>
 
 The last part of `<top-folder>` is the nexus name. Use lowercase letters, digits, and hyphens, as in `garden`. The command writes `nexus.md` in that folder and creates `shelf/` beside it. The shelf is the vault for that tree. It holds the capability pack and the roles `domainprime`, `nexus`, and `node`. The top nexus wears `domainprime` only.
 
+The same command clones the three engines in the pin table into `engines/` at those tags and harvests each `provisions/pack.yaml` onto the shelf. It writes `.mcp.json` at the top folder. A session opened there starts Insitu, Envoy, and Context Forge against that folder and that shelf. The file does not edit a user-level host config, and the install does not write `platforms.yaml`.
+
+After Insitu is harvested, the new tree's `_global` map imports `methodology/product-provisions` from `insitu-core`. The article stays in the Insitu repository.
+
 Refresh the shelf from a newer copy of this repo:
 
 ```
 python install.py <top-folder> --update
 ```
 
-The refresh replaces the generated pack, roles, articles, and skills. It leaves `nexus.md` and the project maps as they are. Engines and the Brain Forge choice come later.
+The refresh replaces the generated pack, roles, articles, and skills, and harvests the engines again. It leaves `nexus.md` and the project maps as they are, apart from adding the `methodology/product-provisions` import when that import is missing. If a clone fails, run the same command with `--update` to finish. Brain Forge is still a later choice.
 
 ## License
 

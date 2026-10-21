@@ -1,17 +1,25 @@
 #!/usr/bin/env python3
-"""Create a Domain Prime top folder and its shelf.
+"""Create a Domain Prime top folder, its shelf, and its three engines.
 
 The shelf is the vault root for that tree. Insitu loads one role file from a
 pack (roles/<pack id>.yaml) and loads every other role from the vault root.
 The three roles are therefore written in both places. Harvest copies articles
 and skills only, so a later harvest does not keep the role files inside the
 library pack. --update puts them back, in the library pack and at the shelf root.
+
+The same command clones Insitu, Envoy, and Context Forge at the pinned tags
+into engines/, harvests each provisions/pack.yaml onto the shelf, and writes
+.mcp.json so a session opened at the top folder starts those servers against
+that folder. It does not edit a user-level host config.
 """
 
 from __future__ import annotations
 
+import json
 import shutil
+import subprocess
 import sys
+from collections.abc import Callable
 from pathlib import Path
 
 SEGMENT = r"^[a-z0-9-]+$"
@@ -22,18 +30,37 @@ REQUIRED_GLOBAL = (
     "methodology/context-moves",
 )
 ROLE_LISTS = ("core", "on_demand", "skills")
+PINS = (
+    {"name": "insitu", "repo": "https://github.com/srmackey/insitu", "tag": "v0.25.1"},
+    {"name": "envoy", "repo": "https://github.com/srmackey/envoy", "tag": "v0.4.1"},
+    {
+        "name": "context-forge",
+        "repo": "https://github.com/srmackey/context-forge",
+        "tag": "v0.4.0",
+    },
+)
+PROVISIONS_PACK = "insitu-core"
+PROVISIONS_ARTICLE = "methodology/product-provisions"
+Fetch = Callable[[str, str, Path], None]
 
 
 class InstallError(Exception):
     """The install cannot proceed. The message is the whole report."""
 
 
-def install_tree(product: Path, top: Path, update: bool = False) -> None:
+def install_tree(
+    product: Path,
+    top: Path,
+    update: bool = False,
+    fetch: Fetch | None = None,
+) -> None:
     """Write or refresh one install. `product` is this repo. `top` is the new tree."""
     product = product.resolve()
     top = top.resolve()
     manifest = load_manifest(product / "provisions" / "pack.yaml")
     validate_manifest(product, manifest)
+    if fetch is None:
+        fetch = git_fetch
     name = top.name
     if not _segment(name):
         raise InstallError(
@@ -47,6 +74,7 @@ def install_tree(product: Path, top: Path, update: bool = False) -> None:
         if not installed:
             raise InstallError("There is no install here to update.")
         _refresh(product, top, manifest)
+        _place_engines(top, fetch)
         return
     if installed:
         raise InstallError(
@@ -58,6 +86,7 @@ def install_tree(product: Path, top: Path, update: bool = False) -> None:
     _write_nexus(product, top, name)
     _write_maps(top, name, manifest)
     _refresh(product, top, manifest)
+    _place_engines(top, fetch)
 
 
 def load_manifest(path: Path) -> dict:
@@ -247,10 +276,10 @@ def _write_maps(top: Path, name: str, manifest: dict) -> None:
     )
 
 
-def _update_lock(shelf: Path, manifest: dict) -> None:
+def _update_lock(shelf: Path, manifest: dict, source: str = "copy") -> None:
     path = shelf / "library" / "lock.yaml"
     lock = parse_lock(path.read_text(encoding="utf-8")) if path.is_file() else {}
-    lock[manifest["id"]] = {manifest["version"]: {"source": "copy"}}
+    lock[manifest["id"]] = {manifest["version"]: {"source": source}}
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(dump_lock(lock), encoding="utf-8")
 
@@ -297,6 +326,175 @@ def parse_lock(text: str) -> dict:
             key, _, value = line.partition(":")
             lock[pack][version][key.strip()] = value.strip()
     return lock
+
+
+def git_fetch(repo: str, tag: str, dest: Path) -> None:
+    """Clone one pinned tag. A failed clone leaves no directory behind."""
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        subprocess.run(
+            ["git", "clone", "--depth", "1", "--branch", tag, repo, str(dest)],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except FileNotFoundError:
+        raise InstallError("git is not available, so the engines cannot be cloned.") from None
+    except subprocess.CalledProcessError as exc:
+        if dest.exists():
+            shutil.rmtree(dest, ignore_errors=True)
+        detail = (exc.stderr or exc.stdout or "").strip()
+        raise InstallError(f"Could not clone {repo} at {tag}. {detail}") from None
+
+
+def _place_engines(top: Path, fetch: Fetch) -> None:
+    engines = top / "engines"
+    engines.mkdir(parents=True, exist_ok=True)
+    for pin in PINS:
+        dest = engines / pin["name"]
+        if not dest.exists():
+            fetch(pin["repo"], pin["tag"], dest)
+        manifest = _engine_manifest(dest)
+        if pin["name"] == "insitu" and manifest["id"] != PROVISIONS_PACK:
+            raise InstallError("The Insitu pin is not the insitu-core pack.")
+        _harvest_checkout(dest, top / "shelf", manifest)
+    insitu = _engine_manifest(engines / "insitu")
+    _ensure_provisions_import(top, insitu["version"])
+    _write_servers(top)
+
+
+def _engine_manifest(checkout: Path) -> dict:
+    path = checkout / "provisions" / "pack.yaml"
+    if not path.is_file():
+        raise InstallError(f"engines/{checkout.name} has no provisions/pack.yaml.")
+    manifest = parse_manifest(path.read_text(encoding="utf-8"))
+    pack_id = str(manifest.get("id") or "")
+    version = str(manifest.get("version") or "")
+    if not _segment(pack_id):
+        raise InstallError(f"engines/{checkout.name} has no pack id.")
+    if not _version(version):
+        raise InstallError(f"engines/{checkout.name} has no pack version.")
+    if not str(manifest.get("name") or "").strip():
+        manifest["name"] = pack_id
+    if not str(manifest.get("kind") or "").strip():
+        raise InstallError(f"engines/{checkout.name} has no pack kind.")
+    articles = manifest.get("articles") or []
+    skills = manifest.get("skills") or []
+    if not articles:
+        raise InstallError(f"engines/{checkout.name} lists no articles.")
+    manifest["articles"] = _members({"articles": articles}, "articles", slashes=1)
+    manifest["skills"] = (
+        _members({"skills": skills}, "skills", slashes=0) if skills else []
+    )
+    for group in (manifest["articles"], manifest["skills"]):
+        for item in group:
+            _checked_source(checkout, item["path"], "the checkout")
+    return manifest
+
+
+def _harvest_checkout(checkout: Path, shelf: Path, manifest: dict) -> None:
+    version_root = shelf / "library" / manifest["id"] / manifest["version"]
+    if version_root.exists():
+        shutil.rmtree(version_root)
+    version_root.mkdir(parents=True)
+    _copy_contract(checkout, version_root, manifest)
+    (version_root / "pack.yaml").write_text(_theme_pack(manifest), encoding="utf-8")
+    (version_root / "VERSION").write_text(manifest["version"] + "\n", encoding="utf-8")
+    _update_lock(shelf, manifest, source="harvest")
+
+
+def _copy_contract(root: Path, dest: Path, manifest: dict) -> None:
+    for article in manifest["articles"]:
+        src = _checked_source(root, article["path"], "the checkout")
+        if not src.is_file():
+            raise InstallError(f"The pack member is missing: {article['path']}")
+        target = dest / "articles" / Path(*article["id"].split("/")).with_suffix(".md")
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(src, target)
+    for skill in manifest["skills"]:
+        src = _checked_source(root, skill["path"], "the checkout")
+        skill_dir = src.parent if src.is_file() else src
+        if not (skill_dir / "SKILL.md").is_file():
+            raise InstallError(f"The pack member is missing: {skill['path']}")
+        target = dest / "skills" / skill["id"]
+        if target.exists():
+            shutil.rmtree(target)
+        shutil.copytree(skill_dir, target)
+
+
+def _theme_pack(manifest: dict) -> str:
+    lines = [
+        f"id: {manifest['id']}",
+        f"name: {manifest['name']}",
+        f"kind: {manifest['kind']}",
+        f"version: {manifest['version']}",
+        "articles:",
+    ]
+    lines.extend(f"  - {item['id']}" for item in manifest["articles"])
+    lines.append("skills:")
+    lines.extend(f"  - {item['id']}" for item in manifest["skills"])
+    lines.append("")
+    return "\n".join(lines)
+
+
+def _ensure_provisions_import(top: Path, version: str) -> None:
+    path = top / "shelf" / "projects" / "_global" / "map.yaml"
+    text = path.read_text(encoding="utf-8")
+    if PROVISIONS_ARTICLE in text and f"pack: {PROVISIONS_PACK}" in text:
+        return
+    if "imports:" in text:
+        raise InstallError(
+            "The global map already has imports, and it does not include "
+            "methodology/product-provisions."
+        )
+    if not text.endswith("\n"):
+        text += "\n"
+    text += (
+        "imports:\n"
+        f"- pack: {PROVISIONS_PACK}\n"
+        f"  version: {version}\n"
+        "  articles:\n"
+        f"  - {PROVISIONS_ARTICLE}\n"
+    )
+    path.write_text(text, encoding="utf-8")
+
+
+def _write_servers(top: Path) -> None:
+    root = top.resolve()
+    shelf = root / "shelf"
+    engines = root / "engines"
+
+    def posix(path: Path) -> str:
+        return path.resolve().as_posix()
+
+    payload = {
+        "mcpServers": {
+            "insitu": {
+                "command": "uv",
+                "args": ["run", "--directory", posix(engines / "insitu"), "insitu"],
+                "env": {
+                    "INSITU_ROOT": posix(root),
+                    "INSITU_HOME": posix(shelf),
+                },
+            },
+            "envoy": {
+                "command": "uv",
+                "args": ["run", "--directory", posix(engines / "envoy"), "envoy"],
+                "env": {"ENVOY_ROOT": posix(root)},
+            },
+            "contextforge": {
+                "command": "uv",
+                "args": [
+                    "run",
+                    "--directory",
+                    posix(engines / "context-forge"),
+                    "contextforge",
+                ],
+                "env": {"CONTEXTFORGE_ROOT": posix(root)},
+            },
+        }
+    }
+    (root / ".mcp.json").write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
 
 
 def dump_lock(lock: dict) -> str:
@@ -354,14 +552,14 @@ def _role_lists(product: Path, rel: str) -> dict[str, list[str]]:
     return found
 
 
-def _checked_source(product: Path, rel: str) -> Path:
+def _checked_source(root: Path, rel: str, label: str = "the product") -> Path:
     if not rel or rel.startswith(("/", "\\")) or ".." in Path(rel).parts:
-        raise InstallError(f"Member path leaves the product: {rel}")
-    src = (product / rel).resolve()
+        raise InstallError(f"Member path leaves {label}: {rel}")
+    src = (root / rel).resolve()
     try:
-        src.relative_to(product.resolve())
+        src.relative_to(root.resolve())
     except ValueError:
-        raise InstallError(f"Member path leaves the product: {rel}") from None
+        raise InstallError(f"Member path leaves {label}: {rel}") from None
     return src
 
 
