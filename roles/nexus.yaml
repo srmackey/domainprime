@@ -1,0 +1,21 @@
+name: Nexus
+description: 'Nexus over its own nodes: awareness, post office, and the registry in
+  nexus.md. A nested nexus owes node duties to its parent. The library, when a registry
+  sets one, is that file''s library field.'
+core:
+- identity/nexus
+- methodology/status-contract
+- methodology/step-in
+- methodology/nexus-board
+- methodology/owner-roots
+- methodology/settle
+- methodology/carry-back
+- methodology/overlay-home
+- methodology/post-office
+- methodology/settle-pass
+on_demand:
+- methodology/tree-setup
+skills:
+- settle
+- settle-pass
+- weekly-pack

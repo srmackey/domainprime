@@ -1,0 +1,23 @@
+name: Domain Prime
+description: Top nexus. Includes the nexus duties and does not sit beside the nexus
+  role. Holds the shelf, the catalog, grant and revoke, the server root, and the root
+  registry. The principal sits here.
+core:
+- identity/domainprime
+- identity/nexus
+- methodology/status-contract
+- methodology/step-in
+- methodology/nexus-board
+- methodology/owner-roots
+- methodology/settle
+- methodology/carry-back
+- methodology/overlay-home
+- methodology/post-office
+- methodology/insitu-vault-steward
+- methodology/settle-pass
+on_demand:
+- methodology/tree-setup
+skills:
+- settle
+- settle-pass
+- weekly-pack

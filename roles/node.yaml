@@ -1,0 +1,14 @@
+name: Node
+description: 'A Domain Prime node: one working folder, nexus as post office, no uncontracted
+  peering.'
+core:
+- identity/node
+- methodology/node-inbox
+- methodology/status-contract
+- methodology/owner-roots
+- methodology/settle
+- methodology/board-subscriber
+- methodology/overlay-home
+on_demand: []
+skills:
+- settle
