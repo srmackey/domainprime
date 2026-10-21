@@ -2,7 +2,29 @@
 
 Domain Prime is the installable tree: a seed, an empty registry, and the engines a release pins.
 
-A person clones this repo and runs its install. They get one top folder and one shelf. The top folder is one nexus with an empty roster. The installer is the next piece of this repo.
+A person clones this repo and runs its install. They get one top folder and one shelf. The top folder is one nexus with an empty roster.
+
+## Install
+
+Run this from a clone of the repo:
+
+```
+python install.py <top-folder>
+```
+
+The last part of `<top-folder>` is the nexus name. Use lowercase letters, digits, and hyphens, as in `garden`. The command writes `nexus.md` in that folder and creates `shelf/` beside it. The shelf is the vault for that tree. It holds the capability pack and the roles `domainprime`, `nexus`, and `node`. The top nexus wears `domainprime` only.
+
+Refresh the shelf from a newer copy of this repo:
+
+```
+python install.py <top-folder> --update
+```
+
+The refresh replaces the generated pack, roles, articles, and skills. It leaves `nexus.md` and the project maps as they are. Engines and the Brain Forge choice come later.
+
+## License
+
+MIT. The terms are in `LICENSE`.
 
 ## Pins
 
