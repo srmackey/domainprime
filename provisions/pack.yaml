@@ -4,58 +4,58 @@ kind: capability
 version: 0.1.0
 articles:
   - id: identity/domainprime
-    path: articles/identity/domainprime.md
+    path: provisions/articles/identity/domainprime.md
   - id: identity/nexus
-    path: articles/identity/nexus.md
+    path: provisions/articles/identity/nexus.md
   - id: identity/node
-    path: articles/identity/node.md
+    path: provisions/articles/identity/node.md
   - id: methodology/status-contract
-    path: articles/methodology/status-contract.md
+    path: provisions/articles/methodology/status-contract.md
   - id: methodology/step-in
-    path: articles/methodology/step-in.md
+    path: provisions/articles/methodology/step-in.md
   - id: methodology/nexus-board
-    path: articles/methodology/nexus-board.md
+    path: provisions/articles/methodology/nexus-board.md
   - id: methodology/owner-roots
-    path: articles/methodology/owner-roots.md
+    path: provisions/articles/methodology/owner-roots.md
   - id: methodology/settle
-    path: articles/methodology/settle.md
+    path: provisions/articles/methodology/settle.md
   - id: methodology/carry-back
-    path: articles/methodology/carry-back.md
+    path: provisions/articles/methodology/carry-back.md
   - id: methodology/overlay-home
-    path: articles/methodology/overlay-home.md
+    path: provisions/articles/methodology/overlay-home.md
   - id: methodology/post-office
-    path: articles/methodology/post-office.md
+    path: provisions/articles/methodology/post-office.md
   - id: methodology/insitu-vault-steward
-    path: articles/methodology/insitu-vault-steward.md
+    path: provisions/articles/methodology/insitu-vault-steward.md
   - id: methodology/settle-pass
-    path: articles/methodology/settle-pass.md
+    path: provisions/articles/methodology/settle-pass.md
   - id: methodology/tree-setup
-    path: articles/methodology/tree-setup.md
+    path: provisions/articles/methodology/tree-setup.md
   - id: methodology/node-inbox
-    path: articles/methodology/node-inbox.md
+    path: provisions/articles/methodology/node-inbox.md
   - id: methodology/board-subscriber
-    path: articles/methodology/board-subscriber.md
+    path: provisions/articles/methodology/board-subscriber.md
   - id: methodology/principal-charter
-    path: articles/methodology/principal-charter.md
+    path: provisions/articles/methodology/principal-charter.md
   - id: methodology/autonomy-gate-provenance
-    path: articles/methodology/autonomy-gate-provenance.md
+    path: provisions/articles/methodology/autonomy-gate-provenance.md
   - id: methodology/context-moves
-    path: articles/methodology/context-moves.md
+    path: provisions/articles/methodology/context-moves.md
 global:
   - methodology/principal-charter
   - methodology/autonomy-gate-provenance
   - methodology/context-moves
 roles:
   - id: domainprime
-    path: roles/domainprime.yaml
+    path: provisions/roles/domainprime.yaml
   - id: nexus
-    path: roles/nexus.yaml
+    path: provisions/roles/nexus.yaml
   - id: node
-    path: roles/node.yaml
+    path: provisions/roles/node.yaml
 skills:
   - id: settle
-    path: skills/settle/SKILL.md
+    path: provisions/skills/settle/SKILL.md
   - id: settle-pass
-    path: skills/settle-pass/SKILL.md
+    path: provisions/skills/settle-pass/SKILL.md
   - id: weekly-pack
-    path: skills/weekly-pack/SKILL.md
+    path: provisions/skills/weekly-pack/SKILL.md
