@@ -44,7 +44,7 @@ MIT. The terms are in `LICENSE`.
 
 | Pin | Repository | Version | When |
 |---|---|---|---|
-| Insitu | https://github.com/srmackey/insitu | v0.25.1 | every install |
+| Insitu | https://github.com/srmackey/insitu | v0.26.0 | every install |
 | Envoy | https://github.com/srmackey/envoy | v0.4.1 | every install |
 | Context Forge | https://github.com/srmackey/context-forge | v0.4.0 | every install |
 | Brain Forge | https://github.com/srmackey/brain-forge | v0.2.9 | only when the install includes it |

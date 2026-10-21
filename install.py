@@ -40,7 +40,7 @@ REQUIRED_GLOBAL = (
 )
 ROLE_LISTS = ("core", "on_demand", "skills")
 PINS = (
-    {"name": "insitu", "repo": "https://github.com/srmackey/insitu", "tag": "v0.25.1"},
+    {"name": "insitu", "repo": "https://github.com/srmackey/insitu", "tag": "v0.26.0"},
     {"name": "envoy", "repo": "https://github.com/srmackey/envoy", "tag": "v0.4.1"},
     {
         "name": "context-forge",
