@@ -1,0 +1,7 @@
+id: brain-forge
+name: Brain Forge
+kind: theme
+version: 0.1.0
+articles:
+  - id: methodology/capture-types
+    path: _brain-forge/articles/methodology/capture-types.md

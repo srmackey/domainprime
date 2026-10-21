@@ -52,8 +52,14 @@ class InstallTests(unittest.TestCase):
     def tearDown(self):
         self._tmp.cleanup()
 
-    def _install(self, top, update=False):
-        install.install_tree(ROOT, top, update=update, fetch=fixture_fetch)
+    def _install(self, top, update=False, brain_forge=False, fetch=None):
+        install.install_tree(
+            ROOT,
+            top,
+            update=update,
+            brain_forge=brain_forge,
+            fetch=fetch or fixture_fetch,
+        )
 
     def test_install_writes_the_registry_and_the_three_roles(self):
         top = self.tmp / "garden"
@@ -260,6 +266,9 @@ class InstallTests(unittest.TestCase):
         self.assertTrue(servers["envoy"]["args"][-2].endswith("engines/envoy"))
         self.assertTrue(servers["contextforge"]["args"][-2].endswith("engines/context-forge"))
         self.assertNotIn("platforms.yaml", (top / ".mcp.json").read_text(encoding="utf-8"))
+        self.assertFalse((top / "engines" / "brain-forge").exists())
+        self.assertNotIn("brain-forge", lock)
+        self.assertFalse(any(path.name == "vault-drop.md" for path in shelf.rglob("*.md")))
 
     def test_update_reharvests_and_does_not_repeat_the_import(self):
         top = self.tmp / "garden"
@@ -295,14 +304,138 @@ class InstallTests(unittest.TestCase):
 
     def test_pins_are_the_every_install_rows(self):
         rows = []
+        optional = None
         for line in (ROOT / "README.md").read_text(encoding="utf-8").splitlines():
-            if line.startswith("| ") and "every install" in line:
-                cells = [cell.strip() for cell in line.strip("|").split("|")]
+            if not line.startswith("| "):
+                continue
+            cells = [cell.strip() for cell in line.strip("|").split("|")]
+            if "every install" in line:
                 rows.append((cells[1], cells[2]))
+            if "only when" in line:
+                optional = (cells[1], cells[2])
         self.assertEqual([(pin["repo"], pin["tag"]) for pin in install.PINS], rows)
+        self.assertEqual((install.BRAIN_FORGE["repo"], install.BRAIN_FORGE["tag"]), optional)
+
+    def test_including_brain_forge_adds_the_vault_and_the_theme_pack(self):
+        top = self.tmp / "garden"
+        self._install(top, brain_forge=True)
+        self._assert_brain_forge(top)
+        self.assertNotIn("library:", (top / "nexus.md").read_text(encoding="utf-8"))
+        needle = "Sco" + "tt"
+        other = "Mac" + "key"
+        own = {str(top.resolve()), top.resolve().as_posix()}
+        hits = []
+        for path in top.rglob("*"):
+            if not path.is_file():
+                continue
+            text = path.read_text(encoding="utf-8", errors="ignore")
+            for item in own:
+                text = text.replace(item, "")
+            if needle in text or other in text:
+                hits.append(str(path.relative_to(top)))
+        self.assertEqual(hits, [])
+
+    def test_second_run_adds_brain_forge_without_rebuilding(self):
+        top = self.tmp / "garden"
+        self._install(top)
+        registry = top / "nexus.md"
+        registry.write_text(registry.read_text(encoding="utf-8") + "SENTINEL\n", encoding="utf-8")
+        marker = top / "engines" / "insitu" / "MARKER"
+        marker.write_text("keep\n", encoding="utf-8")
+        calls = []
+
+        def fetch(repo, tag, dest):
+            calls.append(repo.rstrip("/").rsplit("/", 1)[-1])
+            fixture_fetch(repo, tag, dest)
+
+        self._install(top, brain_forge=True, fetch=fetch)
+        self.assertEqual(calls, ["brain-forge"])
+        self.assertEqual(marker.read_text(encoding="utf-8"), "keep\n")
+        self.assertIn("SENTINEL", registry.read_text(encoding="utf-8"))
+        self._assert_brain_forge(top)
+
+    def test_update_adds_brain_forge_only_when_asked_and_then_keeps_it(self):
+        top = self.tmp / "garden"
+        self._install(top)
+        self._install(top, update=True)
+        self.assertFalse((top / "engines" / "brain-forge").exists())
+        self._install(top, update=True, brain_forge=True)
+        self._assert_brain_forge(top)
+        theme = self._theme()
+        copied = (
+            top
+            / "shelf"
+            / "library"
+            / theme["id"]
+            / theme["version"]
+            / "articles"
+            / "methodology"
+            / "vault-drop.md"
+        )
+        harvested = (
+            top
+            / "shelf"
+            / "library"
+            / "brain-forge"
+            / "0.1.0"
+            / "articles"
+            / "methodology"
+            / "capture-types.md"
+        )
+        copied.write_text("stale\n", encoding="utf-8")
+        harvested.write_text("stale\n", encoding="utf-8")
+        self._install(top, update=True)
+        self.assertTrue(copied.read_text(encoding="utf-8").startswith("---"))
+        self.assertEqual(
+            harvested.read_text(encoding="utf-8"),
+            "# Types\n\nA public contract line.\n",
+        )
+
+    def _theme(self):
+        return install.parse_manifest(
+            (ROOT / "provisions" / "theme" / "pack.yaml").read_text(encoding="utf-8")
+        )
+
+    def _assert_brain_forge(self, top):
+        theme = self._theme()
+        version = top / "shelf" / "library" / theme["id"] / theme["version"]
+        for item in theme["articles"]:
+            rel = Path("articles") / Path(*item["id"].split("/")).with_suffix(".md")
+            self.assertTrue((version / rel).is_file(), item["id"])
+        pack = (version / "pack.yaml").read_text(encoding="utf-8")
+        self.assertIn("kind: theme", pack)
+        self.assertNotIn("\nroles:", "\n" + pack)
+        self.assertTrue(
+            (
+                top
+                / "shelf"
+                / "library"
+                / "brain-forge"
+                / "0.1.0"
+                / "articles"
+                / "methodology"
+                / "capture-types.md"
+            ).is_file()
+        )
+        self.assertTrue((top / "engines" / "brain-forge" / "provisions" / "pack.yaml").is_file())
+        lock = install.parse_lock(
+            (top / "shelf" / "library" / "lock.yaml").read_text(encoding="utf-8")
+        )
+        self.assertEqual(lock["brain-forge"]["0.1.0"]["source"], "harvest")
+        self.assertEqual(lock[theme["id"]][theme["version"]]["source"], "copy")
+        servers = json.loads((top / ".mcp.json").read_text(encoding="utf-8"))["mcpServers"]
+        self.assertEqual(set(servers), {"insitu", "envoy", "contextforge"})
+        for folder in ("projects", "roles"):
+            for path in (top / "shelf" / folder).rglob("*"):
+                if not path.is_file():
+                    continue
+                body = path.read_text(encoding="utf-8")
+                for item in theme["articles"]:
+                    self.assertNotIn(item["id"], body, str(path))
 
     def test_usage(self):
         self.assertEqual(install.main([]), 2)
+        self.assertEqual(install.main(["--with-brain-forge"]), 2)
 
 
 if __name__ == "__main__":

@@ -1,0 +1,13 @@
+id: domainprime-theme
+name: Domain Prime theme
+kind: theme
+version: 0.1.0
+articles:
+  - id: methodology/vault-drop
+    path: provisions/theme/articles/methodology/vault-drop.md
+  - id: methodology/vault-drop-discreet
+    path: provisions/theme/articles/methodology/vault-drop-discreet.md
+  - id: methodology/envoy-status-discreet
+    path: provisions/theme/articles/methodology/envoy-status-discreet.md
+  - id: methodology/envoy-mail-discreet
+    path: provisions/theme/articles/methodology/envoy-mail-discreet.md

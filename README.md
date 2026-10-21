@@ -18,13 +18,23 @@ The same command clones the three engines in the pin table into `engines/` at th
 
 After Insitu is harvested, the new tree's `_global` map imports `methodology/product-provisions` from `insitu-core`. The article stays in the Insitu repository.
 
+Brain Forge stays out unless the install asks for it:
+
+```
+python install.py <top-folder> --with-brain-forge
+```
+
+That clones Brain Forge at its pin into `engines/` and harvests its public contract onto the shelf. It also copies the theme pack `domainprime-theme` there: the vault door and the discreet mail pair. No map composes that pack, and `nexus.md` still has no `library:` line. `.mcp.json` does not gain a server.
+
+The same flag on a folder that is already installed adds Brain Forge and the theme pack and leaves the registry, the maps, and the other engines as they are.
+
 Refresh the shelf from a newer copy of this repo:
 
 ```
 python install.py <top-folder> --update
 ```
 
-The refresh replaces the generated pack, roles, articles, and skills, and harvests the engines again. It leaves `nexus.md` and the project maps as they are, apart from adding the `methodology/product-provisions` import when that import is missing. If a clone fails, run the same command with `--update` to finish. Brain Forge is still a later choice.
+The refresh replaces the generated pack, roles, articles, and skills, and harvests the engines again. It leaves `nexus.md` and the project maps as they are, apart from adding the `methodology/product-provisions` import when that import is missing. If Brain Forge is already in the tree, the refresh harvests it again and recopies the theme pack. To add it during a refresh, pass `--with-brain-forge` as well. If a clone fails, run the same command again with `--update`, and with `--with-brain-forge` when that choice was part of the install.
 
 ## License
 

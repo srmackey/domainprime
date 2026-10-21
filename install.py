@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Create a Domain Prime top folder, its shelf, and its three engines.
+"""Create a Domain Prime top folder, its shelf, and its engines.
 
 The shelf is the vault root for that tree. Insitu loads one role file from a
 pack (roles/<pack id>.yaml) and loads every other role from the vault root.
@@ -11,6 +11,11 @@ The same command clones Insitu, Envoy, and Context Forge at the pinned tags
 into engines/, harvests each provisions/pack.yaml onto the shelf, and writes
 .mcp.json so a session opened at the top folder starts those servers against
 that folder. It does not edit a user-level host config.
+
+--with-brain-forge also clones Brain Forge at its pin, harvests that pack, and
+copies this product's theme pack onto the shelf. No map composes the theme
+pack. Passing the flag on an existing install adds those two and leaves the
+rest of the tree alone.
 """
 
 from __future__ import annotations
@@ -39,6 +44,17 @@ PINS = (
         "tag": "v0.4.0",
     },
 )
+BRAIN_FORGE = {
+    "name": "brain-forge",
+    "repo": "https://github.com/srmackey/brain-forge",
+    "tag": "v0.2.9",
+}
+THEME_ARTICLES = (
+    "methodology/vault-drop",
+    "methodology/vault-drop-discreet",
+    "methodology/envoy-status-discreet",
+    "methodology/envoy-mail-discreet",
+)
 PROVISIONS_PACK = "insitu-core"
 PROVISIONS_ARTICLE = "methodology/product-provisions"
 Fetch = Callable[[str, str, Path], None]
@@ -52,6 +68,7 @@ def install_tree(
     product: Path,
     top: Path,
     update: bool = False,
+    brain_forge: bool = False,
     fetch: Fetch | None = None,
 ) -> None:
     """Write or refresh one install. `product` is this repo. `top` is the new tree."""
@@ -75,8 +92,13 @@ def install_tree(
             raise InstallError("There is no install here to update.")
         _refresh(product, top, manifest)
         _place_engines(top, fetch)
+        if brain_forge or _brain_forge_present(top):
+            _place_brain_forge(product, top, fetch)
         return
     if installed:
+        if brain_forge:
+            _place_brain_forge(product, top, fetch)
+            return
         raise InstallError(
             "That folder is already installed. Pass --update to refresh the shelf."
         )
@@ -87,6 +109,8 @@ def install_tree(
     _write_maps(top, name, manifest)
     _refresh(product, top, manifest)
     _place_engines(top, fetch)
+    if brain_forge:
+        _place_brain_forge(product, top, fetch)
 
 
 def load_manifest(path: Path) -> dict:
@@ -192,15 +216,22 @@ def validate_manifest(product: Path, manifest: dict) -> None:
 def main(argv: list[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
     update = False
+    brain_forge = False
     if "--update" in args:
         args.remove("--update")
         update = True
+    if "--with-brain-forge" in args:
+        args.remove("--with-brain-forge")
+        brain_forge = True
     if len(args) != 1 or args[0].startswith("-"):
-        print("usage: python install.py <top-folder> [--update]", file=sys.stderr)
+        print(
+            "usage: python install.py <top-folder> [--update] [--with-brain-forge]",
+            file=sys.stderr,
+        )
         return 2
     product = Path(__file__).resolve().parent
     try:
-        install_tree(product, Path(args[0]), update=update)
+        install_tree(product, Path(args[0]), update=update, brain_forge=brain_forge)
     except InstallError as exc:
         print(exc, file=sys.stderr)
         return 1
@@ -361,6 +392,69 @@ def _place_engines(top: Path, fetch: Fetch) -> None:
     insitu = _engine_manifest(engines / "insitu")
     _ensure_provisions_import(top, insitu["version"])
     _write_servers(top)
+
+
+def _brain_forge_present(top: Path) -> bool:
+    return (top / "engines" / BRAIN_FORGE["name"]).is_dir()
+
+
+def _place_brain_forge(product: Path, top: Path, fetch: Fetch) -> None:
+    """Clone Brain Forge when it is missing, harvest it, and copy the theme pack."""
+    theme_path = product / "provisions" / "theme" / "pack.yaml"
+    if not theme_path.is_file():
+        raise InstallError("The product has no provisions/theme/pack.yaml.")
+    theme = parse_manifest(theme_path.read_text(encoding="utf-8"))
+    _validate_theme(product, theme)
+    engines = top / "engines"
+    engines.mkdir(parents=True, exist_ok=True)
+    dest = engines / BRAIN_FORGE["name"]
+    if not dest.exists():
+        fetch(BRAIN_FORGE["repo"], BRAIN_FORGE["tag"], dest)
+    manifest = _engine_manifest(dest)
+    if manifest["id"] != BRAIN_FORGE["name"]:
+        raise InstallError("The Brain Forge pin is not the brain-forge pack.")
+    _harvest_checkout(dest, top / "shelf", manifest)
+    _place_theme(product, top / "shelf", theme)
+
+
+def _validate_theme(product: Path, manifest: dict) -> None:
+    if manifest.get("kind") != "theme":
+        raise InstallError("The theme pack kind must be theme.")
+    pack_id = str(manifest.get("id") or "")
+    version = str(manifest.get("version") or "")
+    capability = load_manifest(product / "provisions" / "pack.yaml")
+    if not _segment(pack_id):
+        raise InstallError("The theme pack id is not a single lowercase name.")
+    if pack_id == str(capability.get("id") or ""):
+        raise InstallError("The theme pack cannot use the capability pack id.")
+    if not _version(version):
+        raise InstallError("The theme pack version is not a dotted number.")
+    if not str(manifest.get("name") or "").strip():
+        raise InstallError("The theme pack needs a name.")
+    if manifest.get("roles"):
+        raise InstallError("The theme pack composes no roles.")
+    if manifest.get("global"):
+        raise InstallError("The theme pack is not a global seed.")
+    articles = _members(manifest, "articles", slashes=1)
+    if [item["id"] for item in articles] != list(THEME_ARTICLES):
+        raise InstallError("The theme pack is not the vault door and the discreet mail pair.")
+    manifest["articles"] = articles
+    manifest["skills"] = []
+    for item in articles:
+        src = _checked_source(product, item["path"])
+        if not src.is_file():
+            raise InstallError(f"The pack member is missing: {item['path']}")
+
+
+def _place_theme(product: Path, shelf: Path, manifest: dict) -> None:
+    version_root = shelf / "library" / manifest["id"] / manifest["version"]
+    if version_root.exists():
+        shutil.rmtree(version_root)
+    version_root.mkdir(parents=True)
+    _copy_contract(product, version_root, manifest)
+    (version_root / "pack.yaml").write_text(_theme_pack(manifest), encoding="utf-8")
+    (version_root / "VERSION").write_text(manifest["version"] + "\n", encoding="utf-8")
+    _update_lock(shelf, manifest, source="copy")
 
 
 def _engine_manifest(checkout: Path) -> dict:
