@@ -21,6 +21,8 @@ Thin front. The rules are `methodology/settle-pass`. Each chair follows `methodo
 
 ## File
 
+The heading is the chair's address from `methodology/settle-pass`, not a title.
+
 ```markdown
 ---
 title: Settle wait
@@ -30,12 +32,12 @@ date: YYYY-MM-DD
 
 # Settle wait
 
-## <chair>
+## <address>
 - surface: <section>
 - line: <the line>
 - why: <only copy, or no home>
 
-## <sensitive chair>
+## <address>
 - waiting: <count>
 ```
 

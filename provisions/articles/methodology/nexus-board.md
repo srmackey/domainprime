@@ -9,7 +9,7 @@ tags:
 - nexus
 - board
 created: '2026-08-18'
-updated: '2026-10-20'
+updated: '2026-10-31'
 ---
 
 # Nexus board
@@ -66,7 +66,7 @@ When he asks, compose the pack:
 3. List open mail notes (`note_list`). That is the bell. Do not process inbox because a note arrived.
 4. Inbox count still comes from the nexus `inbox/` files through the overlay home (skip `_log.md`, `README.md`, `_archive/`).
 5. Compose, in this order:
-   a. Overdue, or due within 7 days, from the borrowed board when `focus` is present, then from this nexus's board. Also mention a Forefront that itself contains an ISO date in that window and is not on either board. Mark those "on STATUS, not on the board."
+   a. Overdue, or due within 7 days, from the borrowed board when `focus` is present, then from this nexus's board.
    b. When the result includes `focus`, that board first, in its order. Item 1 is the default next move. The file is that chair's `FOCUS.md`.
    c. This nexus's week. When `focus` is absent, item 1 is the default next move. Flag `always_on_missing`. If a ranked item's node has a `repo:` line, print it indented under the item.
    d. Forefronts on the result, one line each. They are this nexus's direct chairs. The chair named by `focus:` is not among them. Chairs under a child nexus are not in this pack. If that sitrep has `repo:`, print it as the next indented line.
@@ -74,15 +74,15 @@ When he asks, compose the pack:
    f. Desk count, when `desk/` exists at this nexus's root. Count the files. Skip `README.md` and `_archive/`. One line, the number. Omit the line when the count is zero. The filenames wait until he asks what is on the desk.
 6. Ask nothing mandatory. Do not step into a node. Do not start item 1 unless the principal says to. Do not settle any node from this chair.
 
-If a published sitrep `updated` date is older than 7 days, or its Forefront contains an ISO date that is already past, the pack may add one word: `stale`. That is a flag, not a trigger to open the node.
+Do not flag a sitrep for its age, and do not read a date inside a Forefront as a deadline.
 
 ## Weekly review
 
 Trigger: `weekly review` or `update the board`.
 
-Show this nexus's `FOCUS.md`. When `focus:` is set, show that chair's board first. Print each direct-chair Forefront (one line) and any `stale` flags. Print a node's `repo:` line when present. Propose date callouts. If an always-on row has no This week line, propose that node's Forefront as a one-liner. Wait. The principal sets the 3-5. Write the file. Do not open nodes or settle them unless the principal names them.
+Show this nexus's `FOCUS.md`. When `focus:` is set, show that chair's board first. Print each direct-chair Forefront (one line). Print a node's `repo:` line when present. Propose date callouts. If an always-on row has no This week line, propose that node's Forefront as a one-liner. Wait. The principal sets the 3-5. Write the file. Do not open nodes or settle them unless the principal names them.
 
-If the pack is composed and the board is empty or stale, say so and fall back to Forefronts plus any dates it can see.
+If This week is empty, say so and fall back to Forefronts plus any dates it can see.
 
 ## Outside todos, then a project
 
