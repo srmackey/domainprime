@@ -7,7 +7,7 @@ tags:
 - methodology
 - settle
 created: '2026-10-08'
-updated: '2026-10-08'
+updated: '2026-10-31'
 ---
 
 # Settle pass
@@ -22,7 +22,7 @@ The pass steps into each chair, parent before children, and runs settle there. `
 
 One overlay file, `settle-wait.md`, on the chair that ran the pass. The next pass replaces the file. Nothing is appended.
 
-An item names the chair, the surface, the line, and why it was left. A sensitive chair contributes its address and a count. The lines stay on that chair.
+The `##` heading is the chair's address, not a title. Under it, an item names the surface, the line, and why it was left. A sensitive chair uses the same address heading, and the only line under it is the count. The lines stay on that chair.
 
 The principal clears an item by calling it resolved. An item whose line is no longer on that chair is resolved. A sensitive count clears when the principal says so, or when a later pass records a new count. When nothing remains, remove the file.
 
