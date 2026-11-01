@@ -73,12 +73,12 @@ class InstallTests(unittest.TestCase):
         for role in ("domainprime", "nexus", "node"):
             self.assertTrue((shelf / "roles" / f"{role}.yaml").is_file(), role)
             self.assertTrue(
-                (shelf / "library" / "domainprime" / "0.1.0" / "roles" / f"{role}.yaml").is_file(),
+                (shelf / "library" / "domainprime" / "0.1.1" / "roles" / f"{role}.yaml").is_file(),
                 role,
             )
         self.assertTrue((shelf / "skills" / "weekly-pack" / "SKILL.md").is_file())
         pack = (
-            shelf / "library" / "domainprime" / "0.1.0" / "pack.yaml"
+            shelf / "library" / "domainprime" / "0.1.1" / "pack.yaml"
         ).read_text(encoding="utf-8")
         self.assertEqual(_ids(pack, "roles"), ["domainprime", "nexus", "node"])
         global_map = (shelf / "projects" / "_global" / "map.yaml").read_text(encoding="utf-8")
@@ -95,10 +95,10 @@ class InstallTests(unittest.TestCase):
         self.assertNotIn("nexus", _ids(top_map, "roles"))
         lock = (shelf / "library" / "lock.yaml").read_text(encoding="utf-8")
         self.assertIn("source: copy", lock)
-        version = (shelf / "library" / "domainprime" / "0.1.0" / "VERSION").read_text(
+        version = (shelf / "library" / "domainprime" / "0.1.1" / "VERSION").read_text(
             encoding="utf-8"
         )
-        self.assertEqual(version, "0.1.0\n")
+        self.assertEqual(version, "0.1.1\n")
 
     def test_update_keeps_a_sentinel_and_refreshes_roles(self):
         top = self.tmp / "garden"
@@ -128,7 +128,7 @@ class InstallTests(unittest.TestCase):
         self.assertEqual(kept.read_text(encoding="utf-8"), "leave this\n")
         lock = install.parse_lock(lock_path.read_text(encoding="utf-8"))
         self.assertEqual(lock["example"]["0.1.0"]["source"], "harvest")
-        self.assertEqual(lock["domainprime"]["0.1.0"]["source"], "copy")
+        self.assertEqual(lock["domainprime"]["0.1.1"]["source"], "copy")
 
     def test_bad_name_refuses(self):
         with self.assertRaises(install.InstallError):
@@ -247,7 +247,7 @@ class InstallTests(unittest.TestCase):
         self.assertEqual(lock["insitu-core"]["0.7.0"]["source"], "harvest")
         self.assertEqual(lock["envoy"]["0.2.3"]["source"], "harvest")
         self.assertEqual(lock["context-forge"]["0.4.1"]["source"], "harvest")
-        self.assertEqual(lock["domainprime"]["0.1.0"]["source"], "copy")
+        self.assertEqual(lock["domainprime"]["0.1.1"]["source"], "copy")
         global_map = (shelf / "projects" / "_global" / "map.yaml").read_text(encoding="utf-8")
         self.assertEqual(global_map.count("methodology/product-provisions"), 1)
         self.assertIn("pack: insitu-core", global_map)
