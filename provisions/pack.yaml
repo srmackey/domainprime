@@ -1,7 +1,7 @@
 id: domainprime
 name: Domain Prime
 kind: capability
-version: 0.1.1
+version: 0.1.2
 articles:
   - id: identity/domainprime
     path: provisions/articles/identity/domainprime.md

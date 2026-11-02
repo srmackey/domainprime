@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-11-02
+
 ### Added
 
 - A board line can end with `· waiting` when the principal is waiting on it. Envoy reads it as awaiting rather than unaccounted, so it is never flagged, and it stays until the principal changes it. A rewrite of the board keeps the mark.
