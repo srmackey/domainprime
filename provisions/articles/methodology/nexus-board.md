@@ -9,7 +9,7 @@ tags:
 - nexus
 - board
 created: '2026-08-18'
-updated: '2026-10-31'
+updated: '2026-11-02'
 ---
 
 # Nexus board
@@ -29,13 +29,13 @@ updated: YYYY-MM-DD
 ## This week
 The principal's rank. 3-5 items. First item is the default next move.
 
-1. **<one line>** · due: YYYY-MM-DD or none · node: <name> or none
+1. **<one line>** · due: YYYY-MM-DD or none · node: <name> or none[ · waiting]
 
 ## Later
 Everything else still wanted visible: dated or not, node-backed or outside.
 One line each.
 
-- **<one line>** · due: YYYY-MM-DD or none · node: <name> or none
+- **<one line>** · due: YYYY-MM-DD or none · node: <name> or none[ · waiting]
 ```
 
 ## Rules
@@ -49,6 +49,7 @@ One line each.
 - **Always-on nodes** are the rows marked always-on in this nexus's `nexus.md`. This week always has at least one line from each. Do not drop the last line from any of them unless the principal says so. The agent does not invent the lines.
 - Empty **This week** is valid. The pack says so and lists dated **Later** items plus node Forefronts. It does not invent a week. If an always-on node is missing from This week, say so in the pack (and in weekly review, propose that node's Forefront as a one-liner and wait).
 - If the board and a node Forefront disagree, follow Envoy reconcile: do not flag when the trail accounts for the ranked line. Flag `unaccounted`. Do not silently pick a winner.
+- `· waiting` at the end of a line means the principal is waiting on it: a reply, a document, someone else's move. The chair has nothing to carry, so Envoy reads the line as `awaiting` and nothing flags it. It stays until the principal changes it. Only the principal adds or drops the mark, and a rewrite of the board keeps it.
 - When the registry changes (new sibling, disposition, inbox added), `map_upsert` in that same sitting.
 
 ## Session start (the pack)
